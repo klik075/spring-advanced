@@ -131,16 +131,71 @@ Controller에서 `ResponseEntity`를 사용하지 않고 객체를 반환하면,
 
 ---
 ### Lv 7. 저장된 여정 이어하기
+`Spring Data JPA`는 JPA를 Spring에서 쉽게 사용할 수 있도록 Repository 구현을 자동화해주는 Spring Data 프로젝트다.
 
+Repository에 필요한 메서드를 선언하면 Spring Data JPA가 해당 메서드의 구현을 자동으로 생성한다. 이를 통해 직접 SQL을 작성하거나 Repository 구현 클래스를 만들지 않고도 데이터베이스의 데이터를 조회하고 수정할 수 있다.
 
+JpaRepository<Entity, ID>는 JPA를 사용하는 Repository에서 필요한 기본적인 데이터 접근 기능을 제공하는 인터페이스다. JpaRepository를 상속하면 기본적인 CRUD 메서드를 사용할 수 있다.
 
+기본 메서드 종류
+- save(entity) : 엔티티를 저장하거나 수정한다.
 
+- findById(id) : ID를 기준으로 하나의 엔티티를 조회한다.
 
+- findAll() : 전체 엔티티를 조회한다.
 
+- deleteById(id) : ID를 기준으로 엔티티를 삭제한다.
 
+- existsById(id) : 해당 ID의 엔티티가 존재하는지 확인한다.
 
+- count() : 저장된 엔티티의 개수를 조회한다.
 
+`JpaRepository`에서 제공하지 않는 조건으로 데이터를 조회해야 하는 경우 Repository에 메서드를 직접 선언할 수 있다.
 
+`GameRepository`의 `List<Game> findAllByOrderByIdDesc()`는 커스텀 쿼리 메서드로 findAll은 조건에 맞는 데이터를 모두 조회하고, By필드명은 해당 필드를 기준으로 조건을 지정, OrderBy필드명Asc는 지정한 필드를 기준으로 오름차순 정렬을 하는 쿼리를 만들어 낸다.
 
+`Spring Data JPA`는 메서드 이름을 분석하여 필요한 쿼리를 자동으로 생성한다. 이러한 방식을 Derived Query Method라고 한다.
 
+---
+### Lv 8.  더티 체킹: 이름 수정, 자식부터 삭제
+`Dirty Checking`은 Persistence Context가 관리하는 엔티티의 변경 사항을 자동으로 감지하여 데이터베이스에 반영하는 기능이다.
 
+JPA를 통해 `findById()` 등의 메서드로 조회한 엔티티는 Persistence Context에서 Managed 상태로 관리된다. 이때 JPA는 엔티티의 현재 상태를 기준으로 관리하고, 이후 엔티티의 값이 변경되었는지 확인한다.
+
+관리되는 Entity의 필드를 변경하면 JPA가 변경 사항을 감지한다. 트랜잭션이 종료되는 과정에서 변경 사항이 있으면 JPA는 UPDATE SQL을 생성하여 데이터베이스에 반영한다.
+
+`save()`는 주로 새로운 엔티티를 저장하거나 Repository를 통해 엔티티를 저장하는 데 사용한다.
+
+`Dirty Checking`는 엔티티의 변경 사항을 감지하고 `Flush`는 Persistence Context의 변경 내용을 데이터베이스에 동기화하고 필요한 SQL을 실행한다. `Commit`은 트랜잭션을 최종적으로 확정한다.
+
+---
+### Lv 9. 끝난 게임 덮어쓰기 막기
+`Exception`은 프로그램 실행 중 발생할 수 있는 예외 상황을 표현하는 클래스다. 예외가 발생하면 정상적인 코드 흐름을 중단하고 예외 처리 과정으로 이동한다.
+
+`RuntimeException`은 Exception의 하위 클래스로, 실행 중 발생하는 Java 애플리케이션 내부의 예외 상황을 나타낸다. RuntimeException을 상속한 예외는 try-catch나 throws를 강제하지 않는다.
+
+특정 예외 상황을 명확하게 표현하기 위해 `RuntimeException`을 상속하여 Custom Exception을 만들 수 있다.
+`RuntimeException`은 전달받은 문자열을 예외 메시지로 저장할 수 있는 생성자를 제공하므로, 이후 `getMessage()`를 통해 해당 메시지를 확인할 수 있다.
+
+`ResponseStatusException`은 Spring에서 제공하는 예외 클래스로, `RuntimeException`을 상속하면서 HTTP 상태 코드와 메시지를 지정할 수 있도록 만든 Spring의 예외다.
+
+`@RestControllerAdvice`는 여러 Controller에서 발생하는 예외를 전역적으로 처리하기 위한 클래스에 사용하는 어노테이션이다. 일반적으로 `GlobalExceptionHandler`라는 이름의 클래스를 만들어 사용한다.
+
+`@ExceptionHandler`는 특정 예외가 발생했을 때 해당 예외를 처리할 메서드를 지정하는 어노테이션이다.
+
+끝난 게임에 데이터 조작을 하려고 했을 때
+![9_409](/Images/9_409.png)
+
+---
+### Lv 10. 전역 예외 처리: 404·409에 message 붙이기
+`GameNotFoundException`과 `GameFinishedException`을 `RuntimeException`을 상속하여 커스텀 예외 클래스로 만들고, super 생성자를 통해 getMessage()에서 사용할 예외 메시지를 지정한다.
+
+`@ExceptionHandler`를 사용하여 각 예외를 처리하는 전용 핸들러 메서드를 만들고, 예외 객체와 `HttpServletRequest`를 전달받는다. `HttpServletRequest`는 예외를 발생시킨 HTTP 요청의 정보를 담고 있는 객체로, 요청 URI나 HTTP Method 등의 정보를 확인할 때 사용한다.
+
+각 예외에 해당하는 HTTP 상태 코드인 `404 Not Found`, `409 Conflict`와 예외 메시지를 `ErrorResponse`에 담아 클라이언트에 반환한다.
+
+없는 게임을 찾을 때
+![10_404](/Images/10_404.png)
+
+끝난 게임에 데이터 조작을 하려고 했을 때
+![10_409](/Images/10_409.png)
